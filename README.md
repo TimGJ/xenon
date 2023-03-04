@@ -1,2 +1,2 @@
 # xenon
-Symmetric encryption using the NaCl libraries
+AES encryption and on-the-fly decryption of files
