@@ -19,6 +19,22 @@ class Xenon:
     BlockSize = 16  # Size of the blocks in bytes
     PlainTextLengthSize = 8  # Size of the payload length in the file header (a long int)
     Endianness = 'little'  # Byte ordering on CPU
+
+    class SHA:
+        """
+        Minimal class to store hashes of stuff
+        """
+        def __init__(self, data):
+            self.len = len(data)
+            digest = hashes.Hash(hashes.SHA256())
+            digest.update(data)
+            self.sha = digest.finalize()
+
+        def __repr__(self):
+            return f"{self.sha.hex()}"
+
+        def __len__(self):
+            return self.len
     def __init__(self, passphrase):
         """
         Setup a cipher using the passphrase
@@ -28,14 +44,11 @@ class Xenon:
 
         if not isinstance(passphrase, str):
             raise TypeError("Passphrase must be a string")
-        self.passphrase = passphrase.strip()
+        self.passphrase = bytearray(passphrase.strip(), "utf-8")
 
         # Derive the key from the passphrase.
-
-        digest = hashes.Hash(hashes.SHA256())
-        digest.update(bytearray(self.passphrase, "utf8"))
-        self.key = digest.finalize()
-        logging.debug(f"Passphrase {self.passphrase} hashes to {self.key.hex()}")
+        self.pp_sha = Xenon.SHA(self.passphrase)
+        self.key = self.pp_sha.sha
 
         # Setup the initialisation vector/nonce
         self.iv = os.urandom(Xenon.BlockSize)
@@ -43,6 +56,21 @@ class Xenon:
 
         self.cipher = Cipher(algorithms.AES(key=self.key), modes.CBC(self.iv))
 
+        # Setup place holders to record the length and SHA of the passphrase, plain text and cipher text
+        self.pt_sha = None
+        self.ct_sha = None
+
+    def __repr__(self):
+        exposed = 2 # Number of characters to expose in passphrase
+        passphrase = self.passphrase.decode("utf-8")
+        if len(passphrase) >= 2*exposed:
+            passphrase = passphrase[0:exposed] + (len(passphrase) - 2 * exposed) * '*' + passphrase[-exposed:]
+        s = [f"Passphrase {passphrase} ({self.pp_sha})"]
+        if self.pt_sha:
+            s.append(f"Plaintext is {len(self.pt_sha)} bytes ({self.pp_sha})")
+        if self.ct_sha:
+            s.append(f"Ciphertext is {len(self.ct_sha)} bytes ({self.cp_sha})")
+        return ". ".join(s)
     def Encrypt(self, plaintext):
         """
         Encrypts the plaintext with the key.
@@ -63,17 +91,16 @@ class Xenon:
 
         # Setup a random Initilisation Vector and create the cipher.
 
-        ptxlen = len(plaintext)
-        digest = hashes.Hash(hashes.SHA256())
-        digest.update(plaintext)
-        padlen = (Xenon.BlockSize - (ptxlen + Xenon.PlainTextLengthSize) % Xenon.BlockSize) % Xenon.BlockSize
-        logging.debug(f"Plain text is {ptxlen} bytes. Padding is {padlen} bytes")
-        logging.debug(f"SHA-256 of plaintext is {digest.finalize().hex()}")
+        self.pt_sha = Xenon.SHA(plaintext)
+        padlen = (Xenon.BlockSize - (self.pt_sha.len + Xenon.PlainTextLengthSize) % Xenon.BlockSize) % Xenon.BlockSize
+        logging.debug(f"Plaintext is {len(self.pt_sha)} bytes ({self.pt_sha}). Padding is {padlen} bytes")
         encryptor = self.cipher.encryptor()
-        payload = bytes(Xenon.BlockSize) + int.to_bytes(ptxlen, Xenon.PlainTextLengthSize, Xenon.Endianness) + plaintext + bytes(padlen)
+        payload = bytes(Xenon.BlockSize) + int.to_bytes(self.pt_sha.len, Xenon.PlainTextLengthSize, Xenon.Endianness) \
+                  + plaintext + bytes(padlen)
         logging.debug(f"Payload is {len(payload)} bytes")
         ciphertext = encryptor.update(payload) + encryptor.finalize()
-        logging.debug(f"Ciphertext is {len(ciphertext)} bytes")
+        self.ct_sha = Xenon.SHA(ciphertext)
+        logging.debug(f"Ciphertext is {len(self.ct_sha)} bytes")
         return ciphertext
 
     def Decrypt(self, ciphertext):
@@ -82,17 +109,88 @@ class Xenon:
         :param ciphertext: bytearray
         :return plaintext: bytearray
         """
-
-        logging.debug(f"Ciphertext is {len(ciphertext)} bytes")
+        self.ct_sha = Xenon.SHA(ciphertext)
+        logging.debug(f"Ciphertext is {len(self.ct_sha)} bytes ({self.ct_sha})")
         decryptor = self.cipher.decryptor()
         payload = decryptor.update(ciphertext) + decryptor.finalize()
         ptxlen = int.from_bytes(payload[Xenon.BlockSize:Xenon.BlockSize+Xenon.PlainTextLengthSize], Xenon.Endianness)
         plaintext = payload[Xenon.BlockSize + Xenon.PlainTextLengthSize:Xenon.BlockSize + Xenon.PlainTextLengthSize + ptxlen]
-        digest = hashes.Hash(hashes.SHA256())
-        digest.update(plaintext)
-        logging.debug(f"Plain text is {ptxlen} bytes")
-        logging.debug(f"SHA-256 of plaintext is {digest.finalize().hex()}")
+        self.pt_sha = Xenon.SHA(plaintext)
+        logging.debug(f"Plaintext is {len(self.pt_sha)} bytes ({self.pt_sha})")
         return plaintext
+
+    def EncryptFile(self, infile, outfile=None, linelen=60):
+        """
+        Encrypts a file
+        :param infile: file of plaintext
+        :param outfile: filename to write ciphertext to
+        :return: None
+        """
+        if not outfile:
+            outfile = infile + '.xenon'
+
+        with open(infile, "rb") as inf:
+            plaintext = inf.read()
+            logging.debug(f"Read {len(plaintext)} bytes from {infile}")
+
+        ciphertext = self.Encrypt(plaintext)
+        b64ciphertext = base64.encodebytes(ciphertext)
+        lines = [b64ciphertext[index:index + linelen].decode("utf-8") for index in range(0, len(b64ciphertext), linelen)]
+
+        with open(outfile, "w") as outf:
+            outf.write("\n".join(lines))
+            logging.debug(f"Written ciphertext to {outfile}")
+
+    def DecryptFile(self, infile, outfile=None):
+        """
+
+        :param infile: Input file (b64 encoded ciphertext)
+        :param outfile: Output file to write decrypted text to. (Not written if omitted)
+        :return: plaintext
+        """
+
+        with open(infile) as inf:
+            lines = inf.readlines()
+            logging.debug(f"Read {len(lines)} of ciphertext from {infile}")
+            buffer = "".join(lines)
+            ciphertext = base64.b64decode(buffer)
+
+        plaintext = self.Decrypt(ciphertext)
+        if outfile:
+            with open(outfile, "wb") as outf:
+                outf.write(plaintext)
+                logging.debug(f"Written {len(plaintext)} bytes of plaintext to {outfile}")
+        return plaintext
+
+def GetPassPhrase(**kwargs):
+
+    """
+    Get the passphrase. This is a little involved as there are various ways in which it might be supplied.
+    It could be either supplied as a phrase e.g. "sausages" or a file containing the passphrase e.g.
+    /home/missy/.xenonpassphrase. This could be specified as en environment variable or a command line option.
+
+    As this will likely be run non-interactively, then we don't bother prompting for a password. Instead we just
+    raise an exception.
+
+    The order of precedence is that an option supplied on the command line trumps an environment variable and
+    a passphrase trumps a keyfile location.
+    """
+
+    if (passphrase := kwargs.get('passphrase')):
+        logging.debug(f"Got passphrase {passphrase} from command line")
+    elif (keyfile := kwargs.get('keyfile')):
+        passphrase = open(keyfile).read().strip()
+        logging.debug(f"Got passphrase {passphrase} from keyfile {keyfile}")
+    elif "XENON_PASSPHRASE" in os.environ:
+        passphrase = os.environ["XENON_PASSPHRASE"]
+        logging.debug(f"Got passphrase {passphrase} from environment variable XENON_PASSPHRASE")
+    elif "XENON_KEYFILE" in os.environ:
+        passphrase = open(os.environ["XENON_KEYFILE"]).read().strip()
+        logging.debug(f"Got passphrase {passphrase} from keyfile {os.environ['XENON_KEYFILE']} from environment variable XENON_KEYFILE")
+    else:
+        raise ValueError("No passphrase found")
+
+    return passphrase
 
 if __name__ == '__main__':
 
@@ -111,60 +209,10 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO,
                         format="%(asctime)s %(levelname)-9s %(message)s")
 
-
-    # Get the passphrase. This is a little involved as there are various ways in which it might be supplied.
-    # It could be either supplied as a phrase e.g. "sausages" or a file containing the passphrase e.g.
-    # /home/missy/.xenonpassphrase. This could be specified as en environment variable or a command line option.
-    #
-    # As this will likely be run non-interactively, then we don't bother prompting for a password. Instead we just
-    # raise an exception.
-    #
-    # The order of precedence is that an option supplied on the command line trumps an environment variable and
-    # a passphrase trumps a keyfile location.
-
-    if args.passphrase:
-        passphrase = args.passphrase
-        logging.debug(f"Got passphrase {passphrase} from command line")
-    elif args.keyfile:
-        try:
-            passphrase = open(args.keyfile).read().strip()
-        except (FileNotFoundError, PermissionError) as e:
-            logging.critical(e)
-        else:
-            logging.debug(f"Read passphrase {passphrase} from keyfile {args.keyfile} from command line")
-    elif "XENON_PASSPHRASE" in os.environ:
-        passphrase = os.environ["XENON_PASSPHRASE"]
-        logging.debug(f"Got passphrase {passphrase} from environment variable XENON_PASSPHRASE")
-    elif "XENON_KEYFILE" in os.environ:
-        try:
-            passphrase = open(os.environ["XENON_KEYFILE"]).read().strip()
-        except (FileNotFoundError, PermissionError) as e:
-            logging.critical(e)
-            sys.exit()
-        else:
-            logging.debug(f"Read passphrase {passphrase} from keyfile {os.environ['XENON_KEYFILE']} from environment variable XENON_KEYFILE")
-    else:
-        logging.critical("No passphrase specified. Exiting.")
-        sys.exit()
-
-    # Now get the payload to be encrypted or decrypted. If we haven't specified a --input option read it from stdin
-
-    if args.input:
-        try:
-            payload = open(args.input).read()
-        except (FileNotFoundError, PermissionError) as e:
-            logging.critical(e)
-            sys.exit()
-        else:
-            logging.debug(f"Read {len(payload)} bytes from file {args.input}")
-    else:
-        payload = sys.stdin.read()
-        logging.debug(f"Read {len(payload)} bytes from sys.stdin")
-
-    # Now having got the payload and passphrase create a Xenon object using it...
-
+    passphrase = GetPassPhrase(passphrase=args.passphrase, keyfile=args.keyfile)
     x1 = Xenon(passphrase)
-    ct = x1.Encrypt(bytearray(payload, "utf-8"))
+    x1.EncryptFile(args.input, args.output)
     x2 = Xenon(passphrase)
-    pt = x2.Decrypt(ct)
-    print(pt.decode("utf-8"))
+    plaintext = x2.DecryptFile(args.output, args.input+'.new')
+    x3 = Xenon(passphrase+'123')
+    x3.DecryptFile(args.output, args.input + '.bad')
