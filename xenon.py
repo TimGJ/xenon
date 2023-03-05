@@ -132,6 +132,22 @@ class Xenon:
         logging.debug(f"Plaintext is {len(self.pt_sha)} bytes ({self.pt_sha})")
         return plaintext
 
+    def FormatOutput(self, ciphertext, linelen=60):
+        """
+        Takes the ciphertext bytes, converts to b64 and then spilts into lines of upto `linelen`
+        :param ciphertext:
+        :param linelen:
+        :return:
+        """
+        b64ciphertext = base64.b64encode(ciphertext).decode("utf-8")
+        yield "-- Xenon start ".ljust(linelen, "-")
+        offset = 0
+        while offset <= len(b64ciphertext):
+            yield b64ciphertext[offset:offset+linelen]
+            offset += linelen
+        yield "-- Xenon end   ".ljust(linelen, "-")
+
+
     def EncryptFile(self, infile, outfile=None, linelen=60):
         """
         Encrypts a file
@@ -147,11 +163,10 @@ class Xenon:
             logging.debug(f"Read {len(plaintext)} bytes from {infile}")
 
         ciphertext = self.Encrypt(plaintext)
-        b64ciphertext = base64.encodebytes(ciphertext)
-        lines = [b64ciphertext[index:index + linelen].decode("utf-8") for index in range(0, len(b64ciphertext), linelen)]
 
         with open(outfile, "w") as outf:
-            outf.write("\n".join(lines))
+            for line in self.FormatOutput(ciphertext, linelen):
+                print(line, file=outf)
             logging.debug(f"Written ciphertext to {outfile}")
 
     def DecryptFile(self, infile, outfile=None):
@@ -163,9 +178,9 @@ class Xenon:
         """
 
         with open(infile) as inf:
-            lines = inf.readlines()
+            lines = inf.read().splitlines()
             logging.debug(f"Read {len(lines)} of ciphertext from {infile}")
-            buffer = "".join(lines)
+            buffer = "".join(lines[1:-1])
             ciphertext = base64.b64decode(buffer)
 
         plaintext = self.Decrypt(ciphertext)
