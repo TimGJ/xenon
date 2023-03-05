@@ -19,6 +19,7 @@ class Xenon:
     BlockSize = 16  # Size of the blocks in bytes
     PlainTextLengthSize = 8  # Size of the payload length in the file header (a long int)
     Endianness = 'little'  # Byte ordering on CPU
+    Magic = b"Xenon\00"
 
     class SHA:
         """
@@ -71,6 +72,7 @@ class Xenon:
         if self.ct_sha:
             s.append(f"Ciphertext is {len(self.ct_sha)} bytes ({self.cp_sha})")
         return ". ".join(s)
+
     def Encrypt(self, plaintext):
         """
         Encrypts the plaintext with the key.
@@ -81,22 +83,29 @@ class Xenon:
         blocksize. So we therefore need to pad the plaintext with [0..blocksize-1] NULs at the end. But
         if we want to reconstruct the plaintext exactly we need to know how much padding has been added.
 
+        Additionally, if we decrypt the file with the wrong key, various gibberish will be returned (which
+        is what we would expect) but it won't actually throw an exception. So to detect whether we
+        have correctly decrypted the file we have a "magic string" - a series of fixed bytes - which
+        will allow us to tell if the decryption has been successful.
+
         So the payload is of the form (in bytes)
         Start   End   Value
         00      15    Initialisation vector/nonce
         16      23    Length of payload in bytes as a 64-bit little-endian integer
-        24  24+n-1    Plaintext of length n bytes
-        24+n     p    Padding where p % blocksize == 0
+        24      29    Magic string ("Xenon" terminated by a NUL i.e. 0x58656e6f6e00)
+        29  29+n-1    Plaintext of length n bytes
+        29+n     p    Padding where p % blocksize == 0
         """
 
         # Setup a random Initilisation Vector and create the cipher.
 
         self.pt_sha = Xenon.SHA(plaintext)
-        padlen = (Xenon.BlockSize - (self.pt_sha.len + Xenon.PlainTextLengthSize) % Xenon.BlockSize) % Xenon.BlockSize
+        padlen = (Xenon.BlockSize - (len(Xenon.Magic) + self.pt_sha.len + Xenon.PlainTextLengthSize) % Xenon.BlockSize)\
+                 % Xenon.BlockSize
         logging.debug(f"Plaintext is {len(self.pt_sha)} bytes ({self.pt_sha}). Padding is {padlen} bytes")
         encryptor = self.cipher.encryptor()
         payload = bytes(Xenon.BlockSize) + int.to_bytes(self.pt_sha.len, Xenon.PlainTextLengthSize, Xenon.Endianness) \
-                  + plaintext + bytes(padlen)
+                  + Xenon.Magic + plaintext + bytes(padlen)
         logging.debug(f"Payload is {len(payload)} bytes")
         ciphertext = encryptor.update(payload) + encryptor.finalize()
         self.ct_sha = Xenon.SHA(ciphertext)
@@ -114,7 +123,11 @@ class Xenon:
         decryptor = self.cipher.decryptor()
         payload = decryptor.update(ciphertext) + decryptor.finalize()
         ptxlen = int.from_bytes(payload[Xenon.BlockSize:Xenon.BlockSize+Xenon.PlainTextLengthSize], Xenon.Endianness)
-        plaintext = payload[Xenon.BlockSize + Xenon.PlainTextLengthSize:Xenon.BlockSize + Xenon.PlainTextLengthSize + ptxlen]
+        magicoffset = Xenon.BlockSize+Xenon.PlainTextLengthSize
+        if payload[magicoffset:magicoffset+len(Xenon.Magic)] != Xenon.Magic:
+            raise KeyError("Invalid key or not a Xenon file")
+        plaintext = payload[Xenon.BlockSize + Xenon.PlainTextLengthSize + len(Xenon.Magic):\
+                            Xenon.BlockSize + Xenon.PlainTextLengthSize + ptxlen + len(Xenon.Magic)]
         self.pt_sha = Xenon.SHA(plaintext)
         logging.debug(f"Plaintext is {len(self.pt_sha)} bytes ({self.pt_sha})")
         return plaintext
@@ -209,10 +222,19 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO,
                         format="%(asctime)s %(levelname)-9s %(message)s")
 
-    passphrase = GetPassPhrase(passphrase=args.passphrase, keyfile=args.keyfile)
-    x1 = Xenon(passphrase)
-    x1.EncryptFile(args.input, args.output)
-    x2 = Xenon(passphrase)
-    plaintext = x2.DecryptFile(args.output, args.input+'.new')
-    x3 = Xenon(passphrase+'123')
-    x3.DecryptFile(args.output, args.input + '.bad')
+    try:
+        passphrase = GetPassPhrase(passphrase=args.passphrase, keyfile=args.keyfile)
+    except FileNotFoundError as e:
+        logging.critical(e)
+        print(f"Error! {e}")
+    else:
+        x1 = Xenon(passphrase)
+        x1.EncryptFile(args.input, args.output)
+        x2 = Xenon(passphrase)
+        plaintext = x2.DecryptFile(args.output, args.input+'.new')
+        x3 = Xenon(passphrase+'123')
+        try:
+            x3.DecryptFile(args.output, args.input + '.bad')
+        except KeyError as e:
+            logging.critical(e)
+            print(f"Error! {e}")
