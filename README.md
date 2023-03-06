@@ -40,4 +40,10 @@ There are a couple of helper functions, `EncryptFile` and
 methods designed for dealing with reading and writing text 
 files (the normal use-case for the libraries). 
 
+## Test files
+
+The repo contains three test files to ensure that everything works. 
+* `Jabberwocky.txt`: a sample of text (Lewis Carrol's nonsense poem Jabberwocky)
+* `Jabberwocky.xenon`: `Jabberwock.txt` encrypted with the passhprase in `.keyfile`
+* `.keyfile`: the passphrase used to create `Jabberwocky.xenon`
 
