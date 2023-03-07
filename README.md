@@ -14,7 +14,7 @@ the key is computed.
 The ciphertext can optionally be written to a file as b64
 encoded and spilt into fixed-width lines. 
 
-Xenon is derived from the (proprietary) Krypton libraries developed 
+Xenon is inspired the (proprietary) Krypton libraries developed 
 at UKFast. 
 
 ## Usage
@@ -30,7 +30,7 @@ import xenon
 x = xenon.Xenon("sausages")
 ``` 
 
-A Xenon object has two methods, `Encrypt` and `Decrypt`
+A Xenon object has two principal methods, `Encrypt` and `Decrypt`
 which respectively encrypt or decrypt payload.
 
 ```python
@@ -72,3 +72,9 @@ The repo contains three test files to ensure that everything works.
 * `Jabberwocky.txt`: a sample of text (Lewis Carroll's nonsense poem Jabberwocky)
 * `Jabberwocky.xenon`: `Jabberwockiy.txt` encrypted with the passphrase in `.keyfile`
 * `.keyfile`: the passphrase used to create `Jabberwocky.xenon`
+
+# Disclaimer
+
+* This software comes with absolutely no warranty whatsoever. 
+* If your key leaks and you get hacked then it's not my fault.
+* If you forget or lose your key then you won't be able to decrypt stuff. Thats the whole point.
