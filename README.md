@@ -63,7 +63,7 @@ text = x.DecryptFile(infile, outfile)
 The `DecrpytFile` method also returns the plaintext decoded as utf-8 to the caller is this
 is the most common usecase (decrypting e.g. config files on the fly).
 
-## Test files
+## Test files
 
 The repo contains three test files to ensure that everything works. 
 * `Jabberwocky.txt`: a sample of text (Lewis Carrol's nonsense poem Jabberwocky)
