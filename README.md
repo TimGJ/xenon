@@ -60,12 +60,15 @@ and
 text = x.DecryptFile(infile, outfile)
 ```
 
-The `DecrpytFile` method also returns the plaintext decoded as utf-8 to the caller is this
-is the most common usecase (decrypting e.g. config files on the fly).
+The `DecrpytFile` method also returns the plaintext to the caller is this
+is the most common use-case (decrypting e.g. config files on the fly).
+
+Note that this is returned as bytes and so will need the approriate decoding
+applying if, for example, it is to be loaded as JSON or YAML.
 
 ## Test files
 
 The repo contains three test files to ensure that everything works. 
-* `Jabberwocky.txt`: a sample of text (Lewis Carrol's nonsense poem Jabberwocky)
-* `Jabberwocky.xenon`: `Jabberwock.txt` encrypted with the passhprase in `.keyfile`
+* `Jabberwocky.txt`: a sample of text (Lewis Carroll's nonsense poem Jabberwocky)
+* `Jabberwocky.xenon`: `Jabberwockiy.txt` encrypted with the passphrase in `.keyfile`
 * `.keyfile`: the passphrase used to create `Jabberwocky.xenon`
