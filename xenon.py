@@ -10,8 +10,12 @@ import os
 import sys
 import base64
 
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives import hashes
+try:
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+    from cryptography.hazmat.primitives import hashes
+except ImportError:
+    print("Error! Requires the Python cryptography package to be installed. Exiting.")
+    sys.exit(1)
 
 class Xenon:
     """
