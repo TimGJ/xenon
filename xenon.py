@@ -12,6 +12,7 @@ import base64
 
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives import hashes
+
 class Xenon:
     """
     Takes a passphrase sets up an AES cipher.
@@ -36,6 +37,7 @@ class Xenon:
 
         def __len__(self):
             return self.len
+
     def __init__(self, passphrase):
         """
         Setup a cipher using the passphrase
