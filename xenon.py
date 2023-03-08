@@ -213,14 +213,16 @@ def GetPassPhrase(**kwargs):
     if (passphrase := kwargs.get('passphrase')):
         logging.debug(f"Got passphrase {passphrase} from command line")
     elif (keyfile := kwargs.get('keyfile')):
-        passphrase = open(keyfile).read().strip()
-        logging.debug(f"Got passphrase {passphrase} from keyfile {keyfile}")
+        with open(keyfile) as kf:
+            passphrase = kf.read().strip()
+            logging.debug(f"Got passphrase {passphrase} from keyfile {keyfile}")
     elif "XENON_PASSPHRASE" in os.environ:
         passphrase = os.environ["XENON_PASSPHRASE"]
         logging.debug(f"Got passphrase {passphrase} from environment variable XENON_PASSPHRASE")
     elif "XENON_KEYFILE" in os.environ:
-        passphrase = open(os.environ["XENON_KEYFILE"]).read().strip()
-        logging.debug(f"Got passphrase {passphrase} from keyfile {os.environ['XENON_KEYFILE']} from environment variable XENON_KEYFILE")
+        with open(os.environ["XENON_KEYFILE"]) as kf:
+            passphrase = kf.read().strip()
+            logging.debug(f"Got passphrase {passphrase} from keyfile {os.environ['XENON_KEYFILE']} from environment variable XENON_KEYFILE")
     else:
         raise ValueError("No passphrase found")
 
