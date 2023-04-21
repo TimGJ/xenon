@@ -79,9 +79,3 @@ The repo contains three test files to ensure that everything works.
 * If your key leaks and you get hacked then it's not my fault.
 * If you forget or lose your key then you won't be able to decrypt stuff. Thats the whole point.
 
-# Note to self: how to build and upload to PyPi
-
-```bash
-python3 setup.py sdist bdist_wheel  
-python3 -m twine upload dist/*
-```
