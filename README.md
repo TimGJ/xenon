@@ -79,3 +79,8 @@ The repo contains three test files to ensure that everything works.
 * If your key leaks and you get hacked then it's not my fault.
 * If you forget or lose your key then you won't be able to decrypt stuff. Thats the whole point. So there.
 
+# Things I need to do
+
+* Add a `DecryptFile` method to the Xenon class
+* Think about how to handle the keyfile
+* Look at KDFs
