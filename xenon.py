@@ -76,7 +76,7 @@ class Xenon:
         if self.pt_sha:
             s.append(f"Plaintext is {len(self.pt_sha)} bytes ({self.pp_sha})")
         if self.ct_sha:
-            s.append(f"Ciphertext is {len(self.ct_sha)} bytes ({self.cp_sha})")
+            s.append(f"Ciphertext is {len(self.ct_sha)} bytes ({self.ct_sha})")
         return ". ".join(s)
 
     def Encrypt(self, plaintext):
@@ -213,6 +213,7 @@ def GetPassPhrase(**kwargs):
     if (passphrase := kwargs.get('passphrase')):
         logging.debug(f"Got passphrase {passphrase} from command line")
     elif (keyfile := kwargs.get('keyfile')):
+
         with open(keyfile) as kf:
             passphrase = kf.read().strip()
             logging.debug(f"Got passphrase {passphrase} from keyfile {keyfile}")
