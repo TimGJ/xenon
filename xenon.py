@@ -196,6 +196,14 @@ class Xenon:
                 logging.debug(f"Written {len(plaintext)} bytes of plaintext to {outfile}")
         return plaintext
 
+def Obscure(p, n=2):
+    """
+    Takes plaintext p and returns a string of the same length with the first and last n characters intact
+    and replaces the rest with asterisks.
+    """
+    
+    return p[0:n] + (len(p) - 2*n) * '*' + p[-n:]
+
 def GetPassPhrase(**kwargs):
 
     """
@@ -211,22 +219,20 @@ def GetPassPhrase(**kwargs):
     """
 
     if (passphrase := kwargs.get('passphrase')):
-        logging.debug(f"Got passphrase {passphrase} from command line")
+        logging.debug(f"Got passphrase {Obscure(passphrase)} from command line")
     elif (keyfile := kwargs.get('keyfile')):
-
         with open(keyfile) as kf:
             passphrase = kf.read().strip()
-            logging.debug(f"Got passphrase {passphrase} from keyfile {keyfile}")
+            logging.debug(f"Got passphrase {Obscure(passphrase)} from keyfile {keyfile}")
     elif "XENON_PASSPHRASE" in os.environ:
         passphrase = os.environ["XENON_PASSPHRASE"]
-        logging.debug(f"Got passphrase {passphrase} from environment variable XENON_PASSPHRASE")
+        logging.debug(f"Got passphrase {Obscure(passphrase)} from environment variable XENON_PASSPHRASE")
     elif "XENON_KEYFILE" in os.environ:
         with open(os.environ["XENON_KEYFILE"]) as kf:
             passphrase = kf.read().strip()
-            logging.debug(f"Got passphrase {passphrase} from keyfile {os.environ['XENON_KEYFILE']} from environment variable XENON_KEYFILE")
+            logging.debug(f"Got passphrase {Obscure(passphrase)} from keyfile {os.environ['XENON_KEYFILE']} from environment variable XENON_KEYFILE")
     else:
         raise ValueError("No passphrase found")
-
     return passphrase
 
 if __name__ == '__main__':
