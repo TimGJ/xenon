@@ -58,7 +58,7 @@ if __name__ == '__main__':
     ap.add_argument("--create", "-c", help="Create file", action="store_true")
     me = ap.add_mutually_exclusive_group()
     me.add_argument("--passphrase", "-p", help="Decryption passphrase")
-    me.add_argument("--keyfile", "-f", help="Path to passphrase file")
+    me.add_argument("--keyfile", "-k", help="Path to passphrase file")
     ap.add_argument("input", help="Input file")
     args = ap.parse_args()
 
@@ -71,5 +71,14 @@ if __name__ == '__main__':
     except FileNotFoundError as e:
         logging.critical(e)
         print(f"Error! {e}")
+    except ValueError:
+        logging.critical("No passphrase found")
+        print("Error! No passphrase found")
     else:
-        print(f"Passphrase is {Obscure(passphrase)}")
+        if args.create:
+            # Create the encrypted file
+            subprocess.run(["gpg", "--quiet", "--batch", "--yes", "--symmetric", "--cipher-algo", "AES256", "--passphrase", passphrase, args.input], capture_output=True)
+        else:
+            # Decrypt the file
+            subprocess.run(["gpg", "--quiet", "--batch", "--yes", "--decrypt", "--passphrase", passphrase, args.input], capture_output=True)
+            # Now captre
